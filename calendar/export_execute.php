@@ -15,18 +15,28 @@ if (empty($CFG->enablecalendarexport)) {
 }
 
 //Fetch user information
-$checkuserid = !empty($userid) && $user = $DB->get_record('user', array('id' => $userid), 'id,password');
+$checkuserid = !empty($userid) && $user = get_complete_user_data('id', $userid);
 //allowing for fallback check of old url - MDL-27542
-$checkusername = !empty($username) && $user = $DB->get_record('user', array('username' => $username), 'id,password');
+$checkusername = !empty($username) && $user = get_complete_user_data('username', $username);
 if (!$checkuserid && !$checkusername) {
     //No such user
     die('Invalid authentication');
 }
 
+// Store password because \core\session\manager::set_user will unset it.
+$userpassword = $user->password;
+// Set up user and page objects.
+if ($GLOBALS['USER']->id != $user->id) {
+    \core\session\manager::init_empty_session();
+    \core\session\manager::set_user($user);
+}
+$PAGE = new moodle_page();
+$PAGE->set_course($SITE);
+
 //Check authentication token
-$authuserid = !empty($userid) && $authtoken == sha1($userid . $user->password . $CFG->calendar_exportsalt);
+$authuserid = !empty($userid) && $authtoken == sha1($userid . $userpassword . $CFG->calendar_exportsalt);
 //allowing for fallback check of old url - MDL-27542
-$authusername = !empty($username) && $authtoken == sha1($username . $user->password . $CFG->calendar_exportsalt);
+$authusername = !empty($username) && $authtoken == sha1($username . $userpassword . $CFG->calendar_exportsalt);
 if (!$authuserid && !$authusername) {
     die('Invalid authentication');
 }
@@ -44,7 +54,7 @@ $allowed_what = array('all', 'user', 'groups', 'courses');
 $allowed_time = array('weeknow', 'weeknext', 'monthnow', 'monthnext', 'recentupcoming', 'custom');
 
 if (!empty($generateurl)) {
-    $authtoken = sha1($user->id . $user->password . $CFG->calendar_exportsalt);
+    $authtoken = sha1($user->id . $userpassword . $CFG->calendar_exportsalt);
     $params = array();
     $params['preset_what'] = $what;
     $params['preset_time'] = $time;
